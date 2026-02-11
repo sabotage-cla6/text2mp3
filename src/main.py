@@ -11,11 +11,12 @@ import copy
 import argparse
 import talk
 import os
+from pathlib import Path
 from pydub import AudioSegment
 from datetime import timedelta
 
 CUT_START = 0.12
-CUT_SEC = 0.68
+CUT_SEC = 0.72
 tmp_dir = ''
 
 def convertHHmmssfff(time:timedelta):
@@ -33,7 +34,7 @@ def randomname(n):
 
 def ConvertYamlToVoiceData(path, worddict) -> talk.Talk:
     voices = {}
-    voices_data = talk.Talk()
+    voices_data = talk.Talk.create_instance()
 
     dict_data = dict()
     if worddict is not None:
@@ -42,13 +43,7 @@ def ConvertYamlToVoiceData(path, worddict) -> talk.Talk:
     with open(path, encoding="utf-8") as f:
         document = yaml.safe_load(f)
         for yaml_voice in document["voices"]:
-            voice = talk.Voice(yaml_voice["voice"])
-            if "rate" in yaml_voice:
-                voice.rate = yaml_voice["rate"]
-            if "volumn" in yaml_voice:
-                voice.volumn = yaml_voice["volumn"]
-            if "pitch" in yaml_voice:
-                voice.pitch = yaml_voice["pitch"]
+            voice = talk.Voice(yaml_voice)
             voices[yaml_voice["id"]] = voice
         for yaml_sentences in document["sentences"]:
             voice_id = list(yaml_sentences.keys())[0]
@@ -92,7 +87,7 @@ async def main(in_file, out_file, worddict_file):
         worddict_file:
     """
     voices = {}
-    voices_data = talk.Talk()
+    voices_data = talk.Talk.create_instance()
 
     if in_file is not None:
         voices_data = ConvertYamlToVoiceData(in_file, worddict_file)
@@ -253,25 +248,64 @@ async def main(in_file, out_file, worddict_file):
         # shutil.copy(tmpfile_path, out_file)
         # srcfilePath1 = out_file
 
+def __validate_args__(args):
+    """ 引数チェック """
+    if not os.path.isfile(args.input):
+        raise FileNotFoundError(f"入力ファルが見つかりません。{args.input}")
+    if args.dict is not None:
+        if not os.path.isfile(args.dict):
+            raise FileNotFoundError(f"辞書ファイルがいつ借りません。{args.dict}")
 
 
 if __name__ == "__main__":
+    """ main proc"""
     parser = argparse.ArgumentParser(prog="text2mp3", usage="%(prog)s [options]")
     parser.add_argument("-o", "--output", required=False, help='output mp3 file')
+    parser.add_argument("-srt", "--srtfile", required=False, help='srtfile file')
     parser.add_argument("-i", "--input", required=False, help='input yaml file')
-    parser.add_argument("-vf", "--voice-file", required=False, help='voice yaml file.you can write voice info within input file.')
     parser.add_argument("-d", "--dict", required=False, help='word dictionary yaml')
+    parser.add_argument("-st", "--start_trim_sec", required=False)
+    parser.add_argument("-et", "--end_trim_sec", required=False)
     args = parser.parse_args()
+    args.output = args.output if args.output is not None else os.path.splitext( args.input )[0] + '.mp3';
+    args.srtfile = args.srtfile if args.srtfile is not None else f'{os.path.splitext(args.output)[0]}.srt'
+    
+    srtpath = Path(args.srtfile)
+    if srtpath.exists() and srtpath.is_file():
+        os.remove( srtpath.absolute())
 
-    tmp_dir = randomname(10)
-    os.mkdir(f'/tmp/{tmp_dir}')
+    # 引数チェック
+    __validate_args__(args)
 
-    # talk_line = talk.Talk()
-    # if args.input is not None:
-    #     talk_line = ConvertYamlToVoiceData(args.input,args.dict)
+    # 辞書の情報の読み込み
+    dict_data = dict()
+    if args.dict is not None:
+        dict_data = yaml.safe_load(open(args.dict))
 
-    output = args.output if args.output is not None else os.path.splitext( args.input )[0] + '.mp3';
+    with open(args.input, encoding="utf-8") as f:
+        doc = yaml.safe_load(f)
+    # voice 情報の読み込み
+    voices: talk.Voices = talk.Voices(doc)
 
-    asyncio.run(main(args.input, output, args.dict))
+    # text情報の読み込み
+    talk_datas: talk.Talk = talk.Talk(doc,voices,dict_data)
+    talk_datas.start_trim_sec = doc['setting']['cut-start']
+    talk_datas.start_trim_sec = talk_datas.start_trim_sec if talk_datas.start_trim_sec is not None else CUT_START
+    talk_datas.end_trim_sec = doc['setting']['crlf-interval']
+    talk_datas  .end_trim_sec = talk_datas.end_trim_sec if talk_datas.end_trim_sec is not None else CUT_SEC   
 
-    shutil.rmtree(f'/tmp/{tmp_dir}')
+    # 変換処理
+    talk_datas.convert_aync();
+    talk_datas.save(args.output,args.srtfile);
+
+
+    # 変換後結合処理
+
+
+    # tmp_dir = randomname(10)
+    # os.mkdir(f'/tmp/{tmp_dir}')
+
+    # output = args.output if args.output is not None else os.path.splitext( args.input )[0] + '.mp3';
+    # asyncio.run(main(args.input, output, args.dict))
+
+    # shutil.rmtree(f'/tmp/{tmp_dir}')
