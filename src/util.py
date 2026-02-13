@@ -13,3 +13,11 @@ def convertHHmmssfff(time:timedelta):
     ss = int(totsec % 60)
     mi = int((totsec % 1) * 1000)
     return f'{hh:02}:{mm:02}:{ss:02},{mi:03}'
+
+def convertHHmmss(time:timedelta):
+    totsec = time.total_seconds()
+    hh = int(totsec // 3600)
+    mm = int((totsec % 3600) // 60)
+    ss = int(totsec % 60)
+    mi = int((totsec % 1) * 1000)
+    return f'{hh:02}:{mm:02}:{ss:02}'

@@ -38,7 +38,7 @@ class Voices:
             self.list[yaml_voice["id"]] = voice
         pass
 
-class Sentence:
+class Utterance:
     """ 発話情報（１文） """
     def __init__(self,voice,soundtext,originaltext):
         self.voice: Voice = voice
@@ -52,11 +52,28 @@ class Sentence:
     
     def convert_aync(self,tmp_dir,start_trim_sec,end_trim_sec):
         """ mp3変換 """
-        self.task = self.__convert_aync__(tmp_dir,start_trim_sec,end_trim_sec)
+        self.outfile = f'{tmp_dir}/{util.randomname(10)}.mp3'
+        if re.match('^<silent:(.*)>$',self.originaltext):
+            self.task = self.__create_nosound__()
+        else:
+            self.task = self.__convert_aync__(tmp_dir,start_trim_sec,end_trim_sec)
         pass
 
+    async def __create_nosound__(self):
+        silent_sec = re.sub(r'^<silent:(.*)>$',r'\1',self.originaltext)
+        command = [
+            'ffmpeg',
+            '-ar', '48000',
+            '-t', f'{silent_sec}',
+            '-f', 's16le', '-acodec', 'pcm_s16le', '-ac', '2', '-i', '/dev/zero', '-acodec', 'libmp3lame', '-aq', '4',
+            "-loglevel", "error",
+            self.outfile]
+        subprocess.run(command)
+        self.originaltext = ''
+
+
     async def __convert_aync__(self,tmp_dir,start_trim_sec,end_trim_sec):
-        self.outfile = f'{tmp_dir}/{util.randomname(10)},mp3'
+
         communicate = edge_tts.Communicate(
             text=self.soundtext, 
             voice=self.voice.name,
@@ -64,7 +81,6 @@ class Sentence:
             volume=self.voice.volumn,
             pitch=self.voice.pitch,
             boundary='SentenceBoundary')
-
         await communicate.save(self.outfile)
 
         # trim
@@ -78,13 +94,14 @@ class Sentence:
             "-ss", str(start_trim_sec),
             "-to", str(f1Time),
             "-c", "copy",
-            "-loglevel", "quiet",
+            "-loglevel", "error",
             tmpAddFile]
-        subprocess.run(command, stdout=subprocess.DEVNULL)
+        # cmd = f'ffmpeg -c copy -loglevel error  -i {self.outfile} -ss {str(start_trim_sec)} -to {str(f1Time)} {tmpAddFile}'
+        subprocess.run(command)
         shutil.move(tmpAddFile,self.outfile)
 
 class Talk:
-    """ スピーチ """
+    """ 会話 """
 
     def create_instance(): 
         doc: dict = {}
@@ -92,7 +109,7 @@ class Talk:
         return Talk(doc,None,None)
     
     def __init__(self,doc: dict,voices:Voices,dict_data:dict):
-        self.list: list[Sentence]= []
+        self.list: list[Utterance]= []
         self.tmp_dir: str= f'/tmp/{util.randomname(10)}'
         self.start_trim_sec = 0.0
         self.end_trim_sec = 0.0
@@ -116,7 +133,7 @@ class Talk:
         pass
     
     def append(self,voice:Voice,soundtext:str,text:str):
-        self.list.append(Sentence(voice,soundtext,text))
+        self.list.append(Utterance(voice,soundtext,text))
         pass
 
     def convert_aync (self) :
@@ -154,7 +171,7 @@ class Talk:
                 "-safe", "0",
                 "-i", f"{self.tmp_dir}/file_list.txt",
                 "-y", 
-                "-loglevel", "quiet",
+                "-loglevel", "error",
                 "-c", "copy",outfile]
             subprocess.run(command, stdout=subprocess.DEVNULL)
 
