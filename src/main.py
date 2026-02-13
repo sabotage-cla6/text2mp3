@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 import argparse
 import yaml
-import talk
+import speech
 
 CUT_START = 0.12
 CUT_SEC = 0.72
@@ -46,10 +46,10 @@ if __name__ == "__main__":
     with open(args.input, encoding="utf-8") as f:
         doc = yaml.safe_load(f)
     # voice 情報の読み込み
-    voices: talk.Voices = talk.Voices(doc)
+    voices: speech.Voices = speech.Voices(doc)
 
     # text情報の読み込み
-    with talk.Talk(doc,voices,dict_data) as talk_datas: 
+    with speech.Talk(doc,voices,dict_data) as talk_datas: 
         talk_datas.start_trim_sec = doc['setting']['cut-start']
         talk_datas.start_trim_sec = talk_datas.start_trim_sec if talk_datas.start_trim_sec is not None else CUT_START
         talk_datas.end_trim_sec = doc['setting']['crlf-interval']
