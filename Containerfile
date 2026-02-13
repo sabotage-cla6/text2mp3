@@ -12,8 +12,14 @@ ENV USER=ubuntu
 ENV ROOT_PASSWD=ubuntu
 ENV NO_PASSWD=true
 
+
 RUN . /usr/bin/create-user.sh
-RUN apt install -y ffmpeg 
+RUN apt update && apt install -y ffmpeg python3.12-venv
+
+COPY ./src/ /usr/local/text2mp3/
+COPY ./instal-edge-tts.sh /tmp/instal-edge-tts.sh
+RUN . /tmp/instal-edge-tts.sh
+RUN chmod a+x /usr/local/text2mp3/text2mp3.sh
 
 ENTRYPOINT ["/usr/bin/entrypoint.sh"]
 CMD ["vscode"]

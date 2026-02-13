@@ -22,16 +22,14 @@ if __name__ == "__main__":
     # 引数の取得
     parser = argparse.ArgumentParser(prog="text2mp3", usage="%(prog)s [options]")
     parser.add_argument("-o", "--output", required=False, help='output mp3 file')
-    parser.add_argument("-srt", "--srtfile", required=False, help='srtfile file')
+    parser.add_argument("-s", "--srt", required=False, help='srtfile file')
     parser.add_argument("-i", "--input", required=False, help='input yaml file')
     parser.add_argument("-d", "--dict", required=False, help='word dictionary yaml')
-    parser.add_argument("-st", "--start_trim_sec", required=False)
-    parser.add_argument("-et", "--end_trim_sec", required=False)
     args = parser.parse_args()
     args.output = args.output if args.output is not None else os.path.splitext( args.input )[0] + '.mp3'
-    args.srtfile = args.srtfile if args.srtfile is not None else f'{os.path.splitext(args.output)[0]}.srt'
+    args.srt = args.srt if args.srt is not None else f'{os.path.splitext(args.output)[0]}.srt'
     
-    srtpath = Path(args.srtfile)
+    srtpath = Path(args.srt)
     if srtpath.exists() and srtpath.is_file():
         os.remove( srtpath.absolute() )
 
@@ -57,4 +55,4 @@ if __name__ == "__main__":
 
         # 変換処理
         talk_datas.convert_aync()
-        talk_datas.save(args.output,args.srtfile)
+        talk_datas.save(args.output,args.srt)
