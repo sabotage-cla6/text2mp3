@@ -1,3 +1,4 @@
 *.pyc
 *.srt
 *.mp3
+src/pyvenv.cfg
