@@ -14,7 +14,8 @@ ENV NO_PASSWD=true
 
 
 RUN . /usr/bin/create-user.sh
-RUN apt update && apt install -y ffmpeg python3.12-venv
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg python3.12-venv
 
 COPY ./src/ /usr/local/text2mp3/
 COPY ./instal-edge-tts.sh /tmp/instal-edge-tts.sh

@@ -3,6 +3,7 @@ from pathlib import Path
 import argparse
 import yaml
 import speech
+import asyncio
 
 CUT_START = 0.12
 CUT_SEC = 0.72
@@ -36,6 +37,8 @@ if __name__ == "__main__":
     # 引数チェック
     __validate_args__(args)
 
+    print(f'{args.input} -> {args.output}')
+
     # 辞書の情報の読み込み
     dict_data = dict()
     if args.dict is not None:
@@ -54,5 +57,6 @@ if __name__ == "__main__":
         talk_datas.end_trim_sec = talk_datas.end_trim_sec if talk_datas.end_trim_sec is not None else CUT_SEC   
 
         # 変換処理
+        queue = asyncio.Queue()
         talk_datas.convert_aync()
         talk_datas.save(args.output,args.srt)

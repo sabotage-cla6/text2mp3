@@ -8,6 +8,7 @@ import subprocess
 import asyncio
 import ffmpeg
 from datetime import timedelta
+import tqdm
 
 class Voice:
     """ 声情報 """
@@ -77,6 +78,7 @@ class Sentence:
             "-ss", str(start_trim_sec),
             "-to", str(f1Time),
             "-c", "copy",
+            "-loglevel", "quiet",
             tmpAddFile]
         subprocess.run(command, stdout=subprocess.DEVNULL)
         shutil.move(tmpAddFile,self.outfile)
@@ -136,7 +138,7 @@ class Talk:
     async def __save__(self,outfile,srtfile):
         tmp_outfile = f'{self.tmp_dir}/{util.randomname(10)}.mp3'
         shutil.copy('silent.mp3', outfile)
-        for i,utterance in enumerate(self.list):
+        for i,utterance in tqdm.tqdm(enumerate(self.list),total=len(self.list),unit="文"):
             shutil.copy(outfile,tmp_outfile)
             await utterance.task
 
@@ -152,6 +154,7 @@ class Talk:
                 "-safe", "0",
                 "-i", f"{self.tmp_dir}/file_list.txt",
                 "-y", 
+                "-loglevel", "quiet",
                 "-c", "copy",outfile]
             subprocess.run(command, stdout=subprocess.DEVNULL)
 
