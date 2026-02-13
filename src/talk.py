@@ -7,11 +7,10 @@ import shutil
 import subprocess
 import asyncio
 import ffmpeg
-import pathlib
-from collections import namedtuple
 from datetime import timedelta
 
 class Voice:
+    """ 声情報 """
     def __init__(self,yaml_voice):
         self.name: str = yaml_voice["voice"]
         self.rate: str = '+0%'
@@ -23,34 +22,40 @@ class Voice:
             self.volumn = yaml_voice["volumn"]
         if "pitch" in yaml_voice:
             self.pitch = yaml_voice["pitch"]
+        pass
 
 class Voices:
-    
+    """ 声情報の一覧 """
     def __init__(self):
         self.list: dict[Voice] = {}
-        self.outpath = ''
         pass
 
     def __init__(self,doc):
         self.list: dict[Voice] = {}
-        self.outpath = ''
         for yaml_voice in doc["voices"]:
             voice = Voice(yaml_voice)
             self.list[yaml_voice["id"]] = voice
-        
         pass
 
-class Utterance:
+class Sentence:
+    """ 発話情報（１文） """
     def __init__(self,voice,soundtext,originaltext):
         self.voice: Voice = voice
         self.soundtext: str = soundtext
         self.originaltext: str = originaltext
+        self.start_trim_sec = 0.0
+        self.end_trim_sec = 0.0
         self.task: asyncio.Task = None
         self.outfile = None
         pass
     
-    def convert_aync(self,filename):
-        self.outfile = filename
+    def convert_aync(self,tmp_dir,start_trim_sec,end_trim_sec):
+        """ mp3変換 """
+        self.task = self.__convert_aync__(tmp_dir,start_trim_sec,end_trim_sec)
+        pass
+
+    async def __convert_aync__(self,tmp_dir,start_trim_sec,end_trim_sec):
+        self.outfile = f'{tmp_dir}/{util.randomname(10)},mp3'
         communicate = edge_tts.Communicate(
             text=self.soundtext, 
             voice=self.voice.name,
@@ -58,17 +63,34 @@ class Utterance:
             volume=self.voice.volumn,
             pitch=self.voice.pitch,
             boundary='SentenceBoundary')
-        self.task = communicate.save(self.outfile)
+
+        await communicate.save(self.outfile)
+
+        # trim
+        probe = ffmpeg.probe(self.outfile)
+        addfile_time = float(probe['format']['duration'])
+        tmpAddFile = f'{tmp_dir}/{util.randomname(10)}.mp3'
+        f1Time = timedelta(seconds=addfile_time-end_trim_sec)
+        command = [
+            "ffmpeg",
+            "-i", self.outfile,
+            "-ss", str(start_trim_sec),
+            "-to", str(f1Time),
+            "-c", "copy",
+            tmpAddFile]
+        subprocess.run(command, stdout=subprocess.DEVNULL)
+        shutil.move(tmpAddFile,self.outfile)
 
 class Talk:
+    """ スピーチ """
 
     def create_instance(): 
-        doc: dict = {};
+        doc: dict = {}
         doc["sentences"] = list()
         return Talk(doc,None,None)
     
     def __init__(self,doc: dict,voices:Voices,dict_data:dict):
-        self.list: list[Utterance]= []
+        self.list: list[Sentence]= []
         self.tmp_dir: str= f'/tmp/{util.randomname(10)}'
         self.start_trim_sec = 0.0
         self.end_trim_sec = 0.0
@@ -81,7 +103,6 @@ class Talk:
                 if "volumn" in yaml_voice:
                     voice.voiumn = yaml_voice["volumn"]
             for text in yaml_sentences[voice_id].split('\n'):
-                # text = yaml_sentences[voice_id]
                 soundtext = text
                 if text == '':
                     continue
@@ -93,46 +114,35 @@ class Talk:
         pass
     
     def append(self,voice:Voice,soundtext:str,text:str):
-        self.list.append(Utterance(voice,soundtext,text))
+        self.list.append(Sentence(voice,soundtext,text))
         pass
 
-    
-
     def convert_aync (self) :
+        """ スピーチの変換を開始します
+        save を実行するまではファイルは保存されません。
+        """
         for utterance in self.list:
-            filename=  f'{self.tmp_dir}/{util.randomname(10)}.mp3'
-            utterance.convert_aync(filename)
+            utterance.convert_aync(self.tmp_dir,self.start_trim_sec,self.end_trim_sec)
 
     def save(self,outfile,srtfile):
+        """ スピーチをmp3として保存します。
+
+        Args:
+            outfile (str): 保存するmp3ファイルの絶対パス
+            srtfile (str): 保存する字幕ファイルの絶対パス
+        """
         asyncio.run(self.__save__(outfile,srtfile))
 
     async def __save__(self,outfile,srtfile):
         tmp_outfile = f'{self.tmp_dir}/{util.randomname(10)}.mp3'
         shutil.copy('silent.mp3', outfile)
-        i: int = 0
-        for utterance in self.list:
-            i+=1
+        for i,utterance in enumerate(self.list):
             shutil.copy(outfile,tmp_outfile)
             await utterance.task
 
             # get current info
             probe = ffmpeg.probe(outfile)
             outfile_time = timedelta(seconds=float(probe['format']['duration']))
-            
-            # trim
-            probe = ffmpeg.probe(utterance.outfile)
-            addfile_time = float(probe['format']['duration'])
-            tmpAddFile = f'{self.tmp_dir}/{util.randomname(10)}.mp3'
-            f1Time = timedelta(seconds=addfile_time-self.end_trim_sec)
-            command = [
-                "ffmpeg",
-                "-i", utterance.outfile,
-                "-ss", str(self.start_trim_sec),
-                "-to", str(f1Time),
-                "-c", "copy",
-                tmpAddFile]
-            subprocess.run(command)
-            shutil.move(tmpAddFile,utterance.outfile)
 
             with open(f"{self.tmp_dir}/file_list.txt",mode="w", newline='\n') as file:
                 file.writelines([f"file '{tmp_outfile}'\n",f"file '{utterance.outfile}'\n"])
@@ -143,7 +153,7 @@ class Talk:
                 "-i", f"{self.tmp_dir}/file_list.txt",
                 "-y", 
                 "-c", "copy",outfile]
-            subprocess.run(command)
+            subprocess.run(command, stdout=subprocess.DEVNULL)
 
             # get current info
             probe = ffmpeg.probe(outfile)
@@ -155,3 +165,9 @@ class Talk:
                     [f"{i}\n",
                     f"{str(util.convertHHmmssfff(outfile_time))} --> {str(util.convertHHmmssfff(end_time))}\n", f"{orgtext}\n", "\n"])
     
+    def __enter__(self):
+        return self
+
+    def __exit__(self, ex_type, ex_value, trace):
+        shutil.rmtree(self.tmp_dir,) 
+        pass

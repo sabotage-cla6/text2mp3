@@ -34,3 +34,6 @@ voices:
 - id: female-10
   rate: '-10%'
   voice: ja-JP-NanamiNeural
+setting:
+  cut-start: 0.12
+  crlf-interval: 0.72
