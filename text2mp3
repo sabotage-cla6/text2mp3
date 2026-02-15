@@ -1,5 +1,5 @@
 text2mp3() {
-    local opt optarg h m s
+    local opt optarg s
 
     # 引数を取る指定は - のみ
     while getopts viosd-: opt; do
@@ -20,7 +20,8 @@ text2mp3() {
                 shift
                 ;;
             -s|--srt)
-                srtfile="$optarg"
+                srtfile="/tmp/volumn/$optarg"
+                srtopt="-s $srtfile"
                 shift
                 ;;
             -d|--dict)
@@ -42,6 +43,7 @@ text2mp3() {
     shift $((OPTIND - 1))
 
     local message="$1"
+    echo "$srtfile"
 
     podman run \
         --userns=keep-id \
@@ -59,7 +61,7 @@ text2mp3() {
         -i "/tmp/volumn/$input" \
         -o "/tmp/volumn/$output" \
         -d "/tmp/volumn/$dict" \
-        -s "/tmp/volumn/$srtfile"
+        "$srtopt"
 }
 
 text2mp3 $@

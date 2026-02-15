@@ -22,9 +22,9 @@ if __name__ == "__main__":
     """ main proc"""
     # 引数の取得
     parser = argparse.ArgumentParser(prog="text2mp3", usage="%(prog)s [options]")
+    parser.add_argument("-i", "--input", required=True, help='input yaml file')
     parser.add_argument("-o", "--output", required=False, help='output mp3 file')
     parser.add_argument("-s", "--srt", required=False, help='srtfile file')
-    parser.add_argument("-i", "--input", required=False, help='input yaml file')
     parser.add_argument("-d", "--dict", required=False, help='word dictionary yaml')
     args = parser.parse_args()
     args.output = args.output if args.output is not None else os.path.splitext( args.input )[0] + '.mp3'
@@ -47,14 +47,11 @@ if __name__ == "__main__":
     with open(args.input, encoding="utf-8") as f:
         doc = yaml.safe_load(f)
     # voice 情報の読み込み
-    voices: speech.Voices = speech.Voices(doc)
+    voices: speech.Voices = speech.Voices(doc['voices'])
 
     # text情報の読み込み
-    with speech.Talk(doc,voices,dict_data) as talk_datas: 
-        talk_datas.start_trim_sec = doc['setting']['cut-start']
-        talk_datas.start_trim_sec = talk_datas.start_trim_sec if talk_datas.start_trim_sec is not None else CUT_START
-        talk_datas.end_trim_sec = doc['setting']['crlf-interval']
-        talk_datas.end_trim_sec = talk_datas.end_trim_sec if talk_datas.end_trim_sec is not None else CUT_SEC   
+    with speech.Talk(voices,dict_data,doc['setting']) as talk_datas: 
+        talk_datas.set_talk(doc['talk'])
 
         # 変換処理
         queue = asyncio.Queue()

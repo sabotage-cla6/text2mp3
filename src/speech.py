@@ -15,12 +15,12 @@ class Voice:
     def __init__(self,yaml_voice):
         self.name: str = yaml_voice["voice"]
         self.rate: str = '+0%'
-        self.volumn: str = '+0%'
+        self.volume: str = '+0%'
         self.pitch: str = '+0Hz'
         if "rate" in yaml_voice:
             self.rate = yaml_voice["rate"]
-        if "volumn" in yaml_voice:
-            self.volumn = yaml_voice["volumn"]
+        if "volume" in yaml_voice:
+            self.volume = yaml_voice["volume"]
         if "pitch" in yaml_voice:
             self.pitch = yaml_voice["pitch"]
         pass
@@ -31,36 +31,43 @@ class Voices:
         self.list: dict[Voice] = {}
         pass
 
-    def __init__(self,doc):
+    def __init__(self,voices):
         self.list: dict[Voice] = {}
-        for yaml_voice in doc["voices"]:
+        for yaml_voice in voices:
             voice = Voice(yaml_voice)
             self.list[yaml_voice["id"]] = voice
         pass
 
 class Utterance:
     """ 発話情報（１文） """
-    def __init__(self,voice,soundtext,originaltext):
+    def __init__(self,voice,soundtext,originaltext,
+                 start_trim_sec,end_trim_sec,emptyline_break):
         self.voice: Voice = voice
         self.soundtext: str = soundtext
         self.originaltext: str = originaltext
-        self.start_trim_sec = 0.0
-        self.end_trim_sec = 0.0
+        self.start_trim_sec = start_trim_sec
+        self.end_trim_sec = end_trim_sec
+        self.emptyline_break = emptyline_break
         self.task: asyncio.Task = None
         self.outfile = None
         pass
     
-    def convert_aync(self,tmp_dir,start_trim_sec,end_trim_sec):
+    def convert_aync(self,tmp_dir):
         """ mp3変換 """
         self.outfile = f'{tmp_dir}/{util.randomname(10)}.mp3'
-        if re.match('^<silent:(.*)>$',self.originaltext):
-            self.task = self.__create_nosound__()
+
+        if re.match(r'^<break +time="([^"]*)" */>$',self.soundtext.strip()):
+            silent_sec = float(re.sub(r'^<break +time="([^"]*)" */>$',r'\1',self.soundtext.strip()))
+            self.soundtext = None
+            self.originaltext = ''
+            self.task = self.__create_nosound__(silent_sec)
+        elif not self.soundtext and 0 < self.emptyline_break:
+            self.task = self.__create_nosound__(self.emptyline_break)
         else:
-            self.task = self.__convert_aync__(tmp_dir,start_trim_sec,end_trim_sec)
+            self.task = self.__convert_aync__(tmp_dir,self.start_trim_sec,self.end_trim_sec)
         pass
 
-    async def __create_nosound__(self):
-        silent_sec = re.sub(r'^<silent:(.*)>$',r'\1',self.originaltext)
+    async def __create_nosound__(self,silent_sec):
         command = [
             'ffmpeg',
             '-ar', '48000',
@@ -69,8 +76,6 @@ class Utterance:
             "-loglevel", "error",
             self.outfile]
         subprocess.run(command)
-        self.originaltext = ''
-
 
     async def __convert_aync__(self,tmp_dir,start_trim_sec,end_trim_sec):
 
@@ -78,7 +83,7 @@ class Utterance:
             text=self.soundtext, 
             voice=self.voice.name,
             rate=self.voice.rate,
-            volume=self.voice.volumn,
+            volume=self.voice.volume,
             pitch=self.voice.pitch,
             boundary='SentenceBoundary')
         await communicate.save(self.outfile)
@@ -108,32 +113,39 @@ class Talk:
         doc["sentences"] = list()
         return Talk(doc,None,None)
     
-    def __init__(self,doc: dict,voices:Voices,dict_data:dict):
+    def __init__(self,voices:Voices,dict_data:dict,setting: dict):
         self.list: list[Utterance]= []
         self.tmp_dir: str= f'/tmp/{util.randomname(10)}'
-        self.start_trim_sec = 0.0
-        self.end_trim_sec = 0.0
+        self.voices = voices
+        self.vs_change_dict = dict_data
+        self.start_trim_sec = setting['cut-start'] if "cut-start" in setting else 0.0
+        self.end_trim_sec = setting['crlf-interval'] if "crlf-interval" in setting else 0.0
+        self.emptyline_break = setting['emptyline-break'] if "emptyline-break" in setting else 0.0
         os.mkdir(self.tmp_dir)
-        for yaml_sentences in doc["sentences"]:
+        pass
+    
+    def set_talk(self,talk: dict):
+        for yaml_sentences in talk:
             voice_id = list(yaml_sentences.keys())[0]
-            voice = copy.copy(voices.list[voice_id])
+            voice: Voice = copy.copy(self.voices.list[voice_id])
             if "voice" in yaml_sentences:
-                yaml_voice = yaml_sentences["voice"]
-                if "volumn" in yaml_voice:
-                    voice.voiumn = yaml_voice["volumn"]
+                voice.name = yaml_sentences["voice"]
+            if "volume" in yaml_sentences:
+                voice.volume = yaml_sentences["volume"]
+            if "pitch" in yaml_sentences:
+                voice.pitch = yaml_sentences["pitch"]
             for text in yaml_sentences[voice_id].split('\n'):
                 soundtext = text
-                if text == '':
-                    continue
-                if "words" in dict_data:
-                    for pattern in dict_data["words"]:
-                        replacing = dict_data["words"][pattern]
+                if "words" in self.vs_change_dict:
+                    for pattern in self.vs_change_dict["words"]:
+                        replacing = self.vs_change_dict["words"][pattern]
                         soundtext = re.sub(pattern, f'{replacing}', soundtext)
                 self.append(voice, soundtext, text)
         pass
-    
+
     def append(self,voice:Voice,soundtext:str,text:str):
-        self.list.append(Utterance(voice,soundtext,text))
+        self.list.append(Utterance(voice,soundtext,text,
+                            self.start_trim_sec,self.end_trim_sec,self.emptyline_break))
         pass
 
     def convert_aync (self) :
@@ -141,7 +153,7 @@ class Talk:
         save を実行するまではファイルは保存されません。
         """
         for utterance in self.list:
-            utterance.convert_aync(self.tmp_dir,self.start_trim_sec,self.end_trim_sec)
+            utterance.convert_aync(self.tmp_dir)
 
     def save(self,outfile,srtfile):
         """ スピーチをmp3として保存します。
@@ -179,11 +191,13 @@ class Talk:
             probe = ffmpeg.probe(outfile)
             end_time = timedelta(seconds=float(probe['format']['duration']))
 
-            with open(srtfile,mode="a", newline='\n') as srtfilebuf:
-                orgtext = re.sub('_','',utterance.originaltext) 
-                srtfilebuf.writelines(
-                    [f"{i}\n",
-                    f"{str(util.convertHHmmssfff(outfile_time))} --> {str(util.convertHHmmssfff(end_time))}\n", f"{orgtext}\n", "\n"])
+            if srtfile is not None or srtfile != '':
+                with open(srtfile,mode="a", newline='\n') as srtfilebuf:
+                    orgtext = re.sub('_','',utterance.originaltext) 
+                    if orgtext:
+                        srtfilebuf.writelines(
+                            [f"{i}\n",
+                            f"{str(util.convertHHmmssfff(outfile_time))} --> {str(util.convertHHmmssfff(end_time))}\n", f"{orgtext}\n", "\n"])
     
     def __enter__(self):
         return self

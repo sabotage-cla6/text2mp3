@@ -19,9 +19,9 @@ RUN apt-get update && \
 
 COPY ./src/ /usr/local/text2mp3/
 COPY ./instal-edge-tts.sh /tmp/instal-edge-tts.sh
-RUN . /tmp/instal-edge-tts.sh
+RUN . /usr/local/text2mp3/instal-edge-tts.sh
 RUN chmod a+x /usr/local/text2mp3/text2mp3.sh
 
 ENTRYPOINT ["/usr/bin/entrypoint.sh"]
-CMD ["vscode"]
+CMD ["/bin/bash"]
 
