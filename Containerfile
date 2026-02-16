@@ -18,7 +18,6 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg python3.12-venv
 
 COPY ./src/ /usr/local/text2mp3/
-COPY ./instal-edge-tts.sh /tmp/instal-edge-tts.sh
 RUN . /usr/local/text2mp3/instal-edge-tts.sh
 RUN chmod a+x /usr/local/text2mp3/text2mp3.sh
 

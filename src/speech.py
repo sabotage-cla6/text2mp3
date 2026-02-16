@@ -130,6 +130,8 @@ class Talk:
             voice: Voice = copy.copy(self.voices.list[voice_id])
             if "voice" in yaml_sentences:
                 voice.name = yaml_sentences["voice"]
+            if "rate" in yaml_sentences:
+                voice.rate = yaml_sentences["rate"]
             if "volume" in yaml_sentences:
                 voice.volume = yaml_sentences["volume"]
             if "pitch" in yaml_sentences:
