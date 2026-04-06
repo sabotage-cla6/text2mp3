@@ -15,7 +15,7 @@ def __validate_args__(args):
         raise FileNotFoundError(f"入力ファルが見つかりません。{args.input}")
     if args.dict is not None:
         if not os.path.isfile(args.dict):
-            raise FileNotFoundError(f"辞書ファイルがいつ借りません。{args.dict}")
+            raise FileNotFoundError(f"辞書ファイルが見つかりません。{args.dict}")
 
 
 if __name__ == "__main__":
