@@ -43,7 +43,6 @@ text2mp3() {
     shift $((OPTIND - 1))
 
     local message="$1"
-    echo "$srtfile"
 
     podman run \
         --userns=keep-id \
@@ -57,7 +56,7 @@ text2mp3() {
         --rm -it \
         -v "$volumn":/tmp/volumn:Z \
         sabotagecla6/text2mp3 \
-        /usr/local/text2mp3/text2mp3.sh \
+        /bin/bash /usr/local/text2mp3/text2mp3.sh \
         -i "/tmp/volumn/$input" \
         -o "/tmp/volumn/$output" \
         -d "/tmp/volumn/$dict" \
