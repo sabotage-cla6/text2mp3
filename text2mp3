@@ -11,8 +11,8 @@ text2mp3() {
                 volumn="$optarg"
                 shift
                 ;;
-            -i|--input)
-                input="$optarg"
+            -i|--inputfile)
+                inputfile="$optarg"
                 shift
                 ;;
             -o|--output)
@@ -42,22 +42,12 @@ text2mp3() {
     done
     shift $((OPTIND - 1))
 
-    local message="$1"
-
     podman run \
-        --userns=keep-id \
-        --device /dev/snd \
-        -e XDG_RUNTIME_DIR \
-        -e PULSE_SERVER=unix:${XDG_RUNTIME_DIR}/pulse/native \
-        -v ${XDG_RUNTIME_DIR}/pulse:${XDG_RUNTIME_DIR}/pulse:Z \
-        -e DISPLAY --net=host -v $HOME/.Xauthority:/tmp/.Xauthority:Z \
-        -v /tmp/.X11-unix/X0:/tmp/.X11-unix/X0:ro \
-        -u $(id -u):$(id -u) \
         --rm -it \
         -v "$volumn":/tmp/volumn:Z \
         sabotagecla6/text2mp3 \
         /bin/bash /usr/local/text2mp3/text2mp3.sh \
-        -i "/tmp/volumn/$input" \
+        -i "/tmp/volumn/$inputfile" \
         -o "/tmp/volumn/$output" \
         -d "/tmp/volumn/$dict" \
         "$srtopt"
