@@ -43,9 +43,11 @@ images 自体はDocker Hubにあげているため、
 
 ### debian系 の場合
 
+下記コマンドを実行します。
+
 ``` bash
 sudo apt install podman
-podman pull sabotagecla6/text2mp3
+podman pull docker.io/sabotagecla6/text2mp3
 git clone https://github.com/sabotage-cla6/text2mp3.git
 cd text2mp3
 chmod u+x text2mp3
@@ -53,7 +55,9 @@ chmod u+x text2mp3
 
 ### Windowsの場合
 
-実行スクリプトを作成後に記載します。
+1. WSLを有効にする
+2. Podman Desktopをインストールする
+3. pwsh で `podman pull docker.io/sabotagecla6/text2mp3` を実行してイメージを取得
 
 ## 使い方
 
@@ -64,7 +68,7 @@ chmod u+x text2mp3
 1. git からcloneしたディレクトリに移動
 1. 下記コマンドを実行
 ``` bash
-./text2mp3 -v [音声/字幕を出力したいフォルダ] --input [変換元のテキストファイル名] -d [辞書ファイルのファイル名] -o [出力する音声ファイル名] -s [出力する字幕ファイル名]
+./text2mp3 -v [音声/字幕を出力したいフォルダ] -i [変換元のテキストファイル名] -d [辞書ファイルのファイル名] -o [出力する音声ファイル名] -s [出力する字幕ファイル名]
 ```
 
 手軽に試してみたい場合は下記のコマンドを入力してみてください。
@@ -75,4 +79,13 @@ chmod u+x text2mp3
 
 ### Windowsの場合
 
-実行スクリプトを作成後に記載します。
+1. git からcloneしたディレクトリに移動
+2. 1. 下記コマンドを実行
+``` bash
+./text2mp3.ps1 -v [音声/字幕を出力したいフォルダ] --inputfile [変換元のテキストファイル名] -dict [辞書ファイルのファイル名] -output [出力する音声ファイル名] -srtfile [出力する字幕ファイル名]
+```
+
+# 注意事項
+
+音声変換には、Edgeの読み上げ機能で利用しているサービスに接続します。
+そのため、ネットワーク通信が発生します。
