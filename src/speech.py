@@ -186,7 +186,8 @@ class Talk:
                 "-i", f"{self.tmp_dir}/file_list.txt",
                 "-y", 
                 "-loglevel", "error",
-                "-c", "copy",outfile]
+                "-c:a", "libmp3lame",
+                outfile]
             subprocess.run(command, stdout=subprocess.DEVNULL)
 
             # get current info
