@@ -69,5 +69,5 @@ if __name__ == "__main__":
 
         # 変換処理
         queue = asyncio.Queue()
-        talk_datas.convert_aync()
+        talk_datas.convert_aync(tempdir)
         talk_datas.save(args.output,args.srt)
