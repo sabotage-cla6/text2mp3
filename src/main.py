@@ -30,6 +30,11 @@ if __name__ == "__main__":
     args.output = args.output if args.output is not None else os.path.splitext( args.input )[0] + '.mp3'
     args.srt = args.srt if args.srt is not None else f'{os.path.splitext(args.output)[0]}.srt'
     
+    # １文ごとの音声を保存するフォルダ作成
+    tempdir = os.path.splitext( args.output )[0]
+    if not os.path.exists(tempdir):
+        os.mkdir(tempdir)
+
     srtpath = Path(args.srt)
     if srtpath.exists() and srtpath.is_file():
         os.remove( srtpath.absolute() )
@@ -42,10 +47,19 @@ if __name__ == "__main__":
     # 辞書の情報の読み込み
     dict_data = dict()
     if args.dict is not None:
-        dict_data = yaml.safe_load(open(args.dict))
+        try:
+            dict_data = yaml.safe_load(open(args.dict))
+        except yaml.YAMLError as e:
+            print(f"{args.dict}の構文エラー:")
+            print(e)
 
     with open(args.input, encoding="utf-8") as f:
-        doc = yaml.safe_load(f)
+        try:
+            doc = yaml.safe_load(f)
+        except yaml.YAMLError as e:
+            print(f"{args.input}の構文エラー:")
+            print(e)
+
     # voice 情報の読み込み
     voices: speech.Voices = speech.Voices(doc['voices'])
 
