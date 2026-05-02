@@ -183,7 +183,7 @@ class Talk:
             with open(srtfile,mode="a", newline='\n') as srtfilebuf:
                 for i,utterance in enumerate(self.list):
                     probe = ffmpeg.probe(utterance.outfile)
-                    end_time = start_time + timedelta(seconds=float(probe['format']['duration']))
+                    end_time = start_time + timedelta(microseconds=float(probe['format']['duration']) * 1000 * 1000)
                     orgtext = re.sub('_','',utterance.originaltext) 
                     if orgtext:
                         srtfilebuf.writelines(
