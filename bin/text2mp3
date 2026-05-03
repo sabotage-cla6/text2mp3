@@ -1,0 +1,124 @@
+text2mp3() {
+    local opt optarg s
+
+    # 引数を取る指定は - のみ
+    while getopts viosdgl-: opt; do
+        # OPTIND 番目の引数を optarg へ代入
+        optarg="${!OPTIND}"
+        [[ "$opt" = - ]] && opt="-$OPTARG"
+        case "-$opt" in
+            -v|--volumn)
+                volumn="$optarg"
+                shift
+                ;;
+            -i|--infile)
+                infile="$optarg"
+                shift
+                ;;
+            -o|--outfile)
+                outfile="$optarg"
+                shift
+                ;;
+            -s|--srt)
+                srtfile="/tmp/volumn/$optarg"
+                srtopt="-s $srtfile"
+                shift
+                ;;
+            -d|--dictfile)
+                dictfile="$optarg"
+                shift
+                ;;
+            -g|--gloabl_dictfile)
+                gloabl_dictfile="$optarg"
+                shift
+                ;;
+            -l|--show_voice_list)
+                podman run --rm -it sabotagecla6/text2mp3 /bin/bash /usr/local/text2mp3/text2mp3.sh edge-tts --list-voices
+                exit 0
+                ;;
+            --)
+                break
+                ;;
+            -\?)
+                exit 1
+                ;;
+            --*)
+                echo "$0: illegal option -- ${opt##-}" >&2
+                exit 1
+                ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+
+    # 引数チェック
+    if [ -z "$infile" ]; then
+        echo "i オプションに変換元のテキストを記載したYAMLファイルを指定してください。" >&2
+        exit 1
+    fi
+    if [ ! -f "$infile" ]; then
+        echo "$infile が見つかりません。" >&2
+        exit 1
+    fi
+    if [ -n "$volumn" ]; then
+        if [ ! -e "$volumn" ]; then
+            echo "$volumn は存在しないまたはディレクトリではありません。指定する場合には、ディレクトリを指定してください。" >&2
+            exit 1
+        fi
+    fi
+
+
+    # 作業用の一時フォルダ作成
+    tmpdir="/tmp/$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 16 | head -n 1)"
+    mkdir $tmpdir
+
+    # 作業用一時フォルダにファイルコピー
+    cp "$infile" "$tmpdir/infile.yaml"
+    if [ -n "$dictfile" ]; then
+        if [ -f "$dictfile" ]; then
+            cp "$dictfile" "$tmpdir/dictfile.yaml"
+        fi
+    fi
+    ls "$(dirname "$0")/../config/"
+    if [ -f "$(dirname "$0")/../config/global-dict.yaml" ]; then
+        cp "$(dirname "$0")/../config/global-dict.yaml" "$tmpdir/global-dict.yaml"
+    fi
+
+    # 共有ボリュームを指定
+    if [ -z "$volumn" ]; then
+        volumn="./"
+    fi
+
+    args_str=""
+    if [ -z "$outfile" ]; then
+        outfile="$(basename $infile .yaml).mp3"
+        args_str="$args_str -o /tmp/volumn/$outfile"
+    fi
+    if [ -n "$dictfile" ]; then
+        args_str="$args_str -d /tmp/data/dictfile.yaml"
+    fi
+    ls $tmpdir/global-dict.yaml
+    if [ -f "$tmpdir/global-dict.yaml" ]; then
+        args_str="$args_str -g /tmp/data/global-dict.yaml"
+    fi
+
+    echo $args_str
+
+    echo "**************************"
+    podman run \
+        --rm -it \
+        -v "$volumn":/tmp/volumn:Z \
+        -v "$tmpdir":/tmp/data/ \
+        sabotagecla6/text2mp3 \
+        /bin/bash /usr/local/text2mp3/text2mp3.sh \
+        python3 main.py \
+        -i /tmp/data/infile.yaml "$args_str"
+
+    rm -rf $tmpdir
+    echo aaa
+}
+
+
+
+
+text2mp3 $@
+

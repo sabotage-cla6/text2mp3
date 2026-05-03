@@ -14,7 +14,7 @@ ENV NO_PASSWD=true
 
 
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg python3.12-venv
+    DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg python3.12-venv grep
 
 COPY ./src/ /usr/local/text2mp3/
 RUN . /usr/local/text2mp3/instal-edge-tts.sh

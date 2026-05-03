@@ -39,6 +39,8 @@ class Voices:
         pass
 
 class Utterance:
+    def __init__(self):
+        pass
     """ 発話情報（１文） """
     def __init__(self,voice,soundtext,originaltext,
                  start_trim_sec,end_trim_sec,emptyline_break):
@@ -52,32 +54,16 @@ class Utterance:
         self.outfile = None
         pass
     
-    def convert_aync(self,tmp_dir,outfile):
+    async def start_convert(self,tmp_dir):
         """ mp3変換 """
-        self.outfile = f'{tmp_dir}/{util.randomname(10)}.mp3'
-
-        if re.match(r'^<break +time="([^"]*)" */>$',self.soundtext.strip()):
-            silent_sec = float(re.sub(r'^<break +time="([^"]*)" */>$',r'\1',self.soundtext.strip()))
-            self.soundtext = None
-            self.originaltext = ''
-            self.task = self.__create_nosound__(silent_sec)
-        elif not self.soundtext and 0 < self.emptyline_break:
-            self.task = self.__create_nosound__(self.emptyline_break)
-        else:
-            self.task = self.__convert_aync__(tmp_dir,self.start_trim_sec,self.end_trim_sec,outfile)
         pass
 
     async def __create_nosound__(self,silent_sec):
-        command = [
-            'ffmpeg',
-            '-ar', '48000',
-            '-t', f'{silent_sec}',
-            '-f', 's16le', '-acodec', 'pcm_s16le', '-ac', '2', '-i', '/dev/zero', '-acodec', 'libmp3lame', '-aq', '4',
-            "-loglevel", "error",
-            self.outfile]
-        subprocess.run(command)
+        command = f'ffmpeg -ar 48000 -t {silent_sec} -f s16le -acodec pcm_s16le -ac 2 -i /dev/zero -acodec libmp3lame -aq 4 -loglevel error {self.outfile}'
+        process = await asyncio.create_subprocess_shell(command)
+        await process.wait()
 
-    async def __convert_aync__(self,tmp_dir,start_trim_sec,end_trim_sec,outfile):
+    async def __convert_aync__(self):
 
         communicate = edge_tts.Communicate(
             text=self.soundtext, 
@@ -87,10 +73,35 @@ class Utterance:
             pitch=self.voice.pitch,
             boundary='SentenceBoundary')
         await communicate.save(self.outfile)
+        
+    def create_srt(self,outfile):
+        # 字幕ファイルの作成
+        srtfile = f'{os.path.splitext(outfile)[0]}.srt'
+        start_time: timedelta = timedelta(seconds=0)
+        # get current info
+        if srtfile is not None or srtfile != '':
+            with open(srtfile,mode="w", newline='\n') as srtfilebuf:
+                probe = ffmpeg.probe(outfile)
+                end_time = start_time + timedelta(milliseconds=float(probe['format']['duration']) * 1000 )
+                orgtext = re.sub('_','',self.originaltext) 
+                if orgtext:
+                    srtfilebuf.writelines(
+                        [f"{1}\n",
+                        f"{str(util.convertHHmmssfff(start_time))} --> {str(util.convertHHmmssfff(end_time))}\n", f"{orgtext}\n", "\n"])
+                start_time = end_time
 
-        shutil.copy(self.outfile,outfile)
+    def __trim_audio__(self,tmp_dir,start_trim_sec,end_trim_sec):
+        pass
 
+class RealUtterance(Utterance):
+    async def start_convert(self,tmp_dir):
+        """ mp3変換 """
+        self.outfile = f'{tmp_dir}/{util.randomname(10)}.mp3'
+        self.task = asyncio.create_task( self.__convert_aync__())
+
+    def __trim_audio__(self,tmp_dir,start_trim_sec,end_trim_sec):
         # trim
+        
         probe = ffmpeg.probe(self.outfile)
         addfile_time = float(probe['format']['duration'])
         tmpAddFile = f'{tmp_dir}/{util.randomname(10)}.mp3'
@@ -103,9 +114,21 @@ class Utterance:
             "-c", "copy",
             "-loglevel", "error",
             tmpAddFile]
-        # cmd = f'ffmpeg -c copy -loglevel error  -i {self.outfile} -ss {str(start_trim_sec)} -to {str(f1Time)} {tmpAddFile}'
         subprocess.run(command)
         shutil.move(tmpAddFile,self.outfile)
+
+class Silent(Utterance):
+    async def start_convert(self,tmp_dir):
+        """ mp3変換 """
+        self.outfile = f'{tmp_dir}/{util.randomname(10)}.mp3'
+
+        silent_sec = 0
+        if re.match(r'^<break +time="([^"]*)" */>$',self.soundtext.strip()):
+            silent_sec = float(re.sub(r'^<break +time="([^"]*)" */>$',r'\1',self.soundtext.strip()))
+        else:
+            silent_sec =self.emptyline_break
+        self.task = asyncio.create_task( self.__create_nosound__(silent_sec))
+
 
 class Talk:
     """ 会話 """
@@ -148,16 +171,96 @@ class Talk:
         pass
 
     def append(self,voice:Voice,soundtext:str,text:str):
-        self.list.append(Utterance(voice,soundtext,text,
-                            self.start_trim_sec,self.end_trim_sec,self.emptyline_break))
+
+        utterance: Utterance = None
+        if re.match(r'^<break +time="([^"]*)" */>$',soundtext.strip()):
+            utterance = Silent(
+                voice,soundtext,text,
+                self.start_trim_sec,self.end_trim_sec,self.emptyline_break)
+            utterance.soundtext = soundtext.strip()
+            utterance.originaltext = ''
+        elif not soundtext and 0 < self.emptyline_break:
+            utterance = Silent(
+                voice,soundtext,text,
+                self.start_trim_sec,self.end_trim_sec,self.emptyline_break)
+            utterance.soundtext = soundtext.strip()
+            utterance.originaltext = ''
+        else:
+            utterance = RealUtterance(
+                voice,soundtext,text,
+                self.start_trim_sec,self.end_trim_sec,self.emptyline_break)
+            utterance.soundtext = soundtext.strip()
+            utterance.originaltext = text
+
+        self.list.append(utterance)
         pass
 
-    def convert_aync (self,tempdir) :
+    async def convertall_aync (self,sem) :
         """ スピーチの変換を開始します
         save を実行するまではファイルは保存されません。
         """
+        await self.__start_task__(sem)
+        await self.__wait_task__()
+
+    def copy (self,outdir) :
+        """ ファイルをホストと共有しているフォルダにコピーします
+        """
         for i,utterance in enumerate(self.list):
-            utterance.convert_aync(self.tmp_dir,f"{tempdir}/{i:03}.mp3")
+            if isinstance(utterance, RealUtterance):
+                shutil.copy(utterance.outfile, f"{outdir}/{i:03}.mp3")
+
+    def trim (self) :
+        """ ファイルをホストと共有しているフォルダにコピーします
+        """
+        for i,utterance in tqdm.tqdm(enumerate(self.list),total=len(self.list),unit="文"):
+            utterance.__trim_audio__(self.tmp_dir,self.start_trim_sec,self.end_trim_sec)
+
+    async def __start_task__ (self,sem) :
+        async with sem:
+            for i,utterance in enumerate(self.list):
+                await utterance.start_convert(self.tmp_dir)
+
+
+    async def __wait_task__ (self) :
+        for i,task in tqdm.tqdm(enumerate(self.list),total=len(self.list),unit="文"):
+            if task.task:
+                await task.task
+
+    def concat(self,outfile,srtfile):
+        tmp_outfile = f'{self.tmp_dir}/{util.randomname(10)}.mp3'
+        shutil.copy('silent.mp3', outfile)
+
+        # 字幕ファイルの作成
+        start_time: timedelta = timedelta(seconds=0)
+        # get current info
+        if srtfile is not None or srtfile != '':
+            with open(srtfile,mode="a", newline='\n') as srtfilebuf:
+                for i,utterance in enumerate(self.list):
+                    probe = ffmpeg.probe(utterance.outfile)
+                    # なんか微妙にずれるので調整：22ms
+                    end_time = start_time + timedelta(milliseconds=float(probe['format']['duration']) * 1000 - 22 )
+                    orgtext = re.sub('_','',utterance.originaltext) 
+                    if orgtext:
+                        srtfilebuf.writelines(
+                            [f"{i}\n",
+                            f"{str(util.convertHHmmssfff(start_time))} --> {str(util.convertHHmmssfff(end_time))}\n", f"{orgtext}\n", "\n"])
+                    start_time = end_time
+
+        # 音声の結合
+        for i,utterance in enumerate(self.list):
+            with open(f"{self.tmp_dir}/file_list.txt",mode="a", newline='\n') as file:
+                file.writelines(f"file '{utterance.outfile}'\n")
+        command = [
+            "ffmpeg",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", f"{self.tmp_dir}/file_list.txt",
+            "-y", 
+            "-loglevel", "error",
+            "-c:a", "libmp3lame",
+            "-filter_complex", """aresample=osr=44100""",
+            outfile]
+        subprocess.run(command, stdout=subprocess.DEVNULL)
 
     def save(self,outfile,srtfile):
         """ スピーチをmp3として保存します。
@@ -183,7 +286,8 @@ class Talk:
             with open(srtfile,mode="a", newline='\n') as srtfilebuf:
                 for i,utterance in enumerate(self.list):
                     probe = ffmpeg.probe(utterance.outfile)
-                    end_time = start_time + timedelta(microseconds=float(probe['format']['duration']) * 1000 * 1000)
+                    # なんか微妙にずれるので調整：22ms
+                    end_time = start_time + timedelta(milliseconds=float(probe['format']['duration']) * 1000 - 22 )
                     orgtext = re.sub('_','',utterance.originaltext) 
                     if orgtext:
                         srtfilebuf.writelines(

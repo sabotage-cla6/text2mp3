@@ -13,9 +13,6 @@ def __validate_args__(args):
     """ 引数チェック """
     if not os.path.isfile(args.input):
         raise FileNotFoundError(f"入力ファルが見つかりません。{args.input}")
-    if args.dict is not None:
-        if not os.path.isfile(args.dict):
-            raise FileNotFoundError(f"辞書ファイルが見つかりません。{args.dict}")
 
 
 if __name__ == "__main__":
@@ -26,14 +23,15 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", required=False, help='output mp3 file')
     parser.add_argument("-s", "--srt", required=False, help='srtfile file')
     parser.add_argument("-d", "--dict", required=False, help='word dictionary yaml')
+    parser.add_argument("-g", "--global_dictionary", required=False, help='word dictionary yaml')
     args = parser.parse_args()
     args.output = args.output if args.output is not None else os.path.splitext( args.input )[0] + '.mp3'
     args.srt = args.srt if args.srt is not None else f'{os.path.splitext(args.output)[0]}.srt'
     
     # １文ごとの音声を保存するフォルダ作成
-    tempdir = os.path.splitext( args.output )[0]
-    if not os.path.exists(tempdir):
-        os.mkdir(tempdir)
+    outdir = os.path.splitext( args.output )[0]
+    if not os.path.exists(outdir):
+        os.mkdir(outdir)
 
     srtpath = Path(args.srt)
     if srtpath.exists() and srtpath.is_file():
@@ -46,9 +44,15 @@ if __name__ == "__main__":
 
     # 辞書の情報の読み込み
     dict_data = dict()
+    if args.global_dictionary is not None:
+        try:
+            dict_data = dict_data | yaml.safe_load(open(args.global_dictionary))
+        except yaml.YAMLError as e:
+            print(f"{args.global_dictionary}の構文エラー:")
+            print(e)
     if args.dict is not None:
         try:
-            dict_data = yaml.safe_load(open(args.dict))
+            dict_data = dict_data | yaml.safe_load(open(args.dict))
         except yaml.YAMLError as e:
             print(f"{args.dict}の構文エラー:")
             print(e)
@@ -67,7 +71,12 @@ if __name__ == "__main__":
     with speech.Talk(voices,dict_data,doc['setting']) as talk_datas: 
         talk_datas.set_talk(doc['talk'])
 
+        sem = asyncio.Semaphore(5)
         # 変換処理
-        queue = asyncio.Queue()
-        talk_datas.convert_aync(tempdir)
-        talk_datas.save(args.output,args.srt)
+        print("音声変換開始")
+        asyncio.run(talk_datas.convertall_aync(sem))
+        talk_datas.copy(outdir)
+        print("行間の間を調整")
+        talk_datas.trim()
+        print("すべての音声を結合中")
+        talk_datas.concat(args.output,args.srt)
