@@ -2,7 +2,7 @@ text2mp3() {
     local opt optarg s
 
     # 引数を取る指定は - のみ
-    while getopts viosdgl-: opt; do
+    while getopts viodl-: opt; do
         # OPTIND 番目の引数を optarg へ代入
         optarg="${!OPTIND}"
         [[ "$opt" = - ]] && opt="-$OPTARG"
@@ -19,17 +19,8 @@ text2mp3() {
                 outfile="$optarg"
                 shift
                 ;;
-            -s|--srt)
-                srtfile="/tmp/volumn/$optarg"
-                srtopt="-s $srtfile"
-                shift
-                ;;
             -d|--dictfile)
                 dictfile="$optarg"
-                shift
-                ;;
-            -g|--gloabl_dictfile)
-                gloabl_dictfile="$optarg"
                 shift
                 ;;
             -l|--show_voice_list)
@@ -71,6 +62,11 @@ text2mp3() {
     tmpdir="/tmp/$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 16 | head -n 1)"
     mkdir $tmpdir
 
+    # パラメータ未設定の場合の設定
+    if [ -z "$outfile" ]; then
+        outfile="$(basename $infile .yaml).mp3"
+    fi
+
     # 作業用一時フォルダにファイルコピー
     cp "$infile" "$tmpdir/infile.yaml"
     if [ -n "$dictfile" ]; then
@@ -89,19 +85,13 @@ text2mp3() {
     fi
 
     args_str=""
-    if [ -z "$outfile" ]; then
-        outfile="$(basename $infile .yaml).mp3"
-        args_str="$args_str -o /tmp/volumn/$outfile"
-    fi
+    args_str="$args_str -o /tmp/volumn/$outfile"
     if [ -n "$dictfile" ]; then
         args_str="$args_str -d /tmp/data/dictfile.yaml"
     fi
-    ls $tmpdir/global-dict.yaml
     if [ -f "$tmpdir/global-dict.yaml" ]; then
         args_str="$args_str -g /tmp/data/global-dict.yaml"
     fi
-
-    echo $args_str
 
     echo "**************************"
     podman run \
@@ -114,7 +104,6 @@ text2mp3() {
         -i /tmp/data/infile.yaml "$args_str"
 
     rm -rf $tmpdir
-    echo aaa
 }
 
 
