@@ -179,20 +179,21 @@ class Talk:
                 self.start_trim_sec,self.end_trim_sec,self.emptyline_break)
             utterance.soundtext = soundtext.strip()
             utterance.originaltext = ''
-        elif not soundtext and 0 < self.emptyline_break:
+        elif not soundtext.strip() and 0 < self.emptyline_break:
             utterance = Silent(
                 voice,soundtext,text,
                 self.start_trim_sec,self.end_trim_sec,self.emptyline_break)
             utterance.soundtext = soundtext.strip()
             utterance.originaltext = ''
-        else:
+        elif soundtext.strip():
             utterance = RealUtterance(
                 voice,soundtext,text,
                 self.start_trim_sec,self.end_trim_sec,self.emptyline_break)
             utterance.soundtext = soundtext.strip()
             utterance.originaltext = text
 
-        self.list.append(utterance)
+        if utterance:
+            self.list.append(utterance)
         pass
 
     async def convertall_aync (self,sem) :
