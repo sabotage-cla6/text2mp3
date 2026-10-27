@@ -5,5 +5,5 @@ cd $tgt_dir
 sleep 2
 .  ./bin/activate
 pip install edge-tts PyYAML ffmpeg-python tqdm
-
+python -m pip install --upgrade edge-tts
 
